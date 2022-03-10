@@ -1,23 +1,19 @@
-﻿Shader "Unlit/MotionCalculator"
-{
-	Properties
-	{
+﻿Shader "Unlit/MotionCalculator" {
+	Properties {
 		_MainTex ("Texture", 2D) = "white" {}
 		_Next("Next",2D)="black"{}
 		_Previous("Previous",2D)="black"{}
 	}
-	SubShader
-	{
+	SubShader {
 		Tags { "RenderType"="Opaque" }
 		LOD 100
 		cull off
-		Pass
-		{
+		Pass {
 			CGPROGRAM
 			#pragma vertex vert
 			#pragma fragment frag
-			struct v2f
-			{
+            #include "UnityCG.cginc"
+			struct v2f {
 				float2 uv : TEXCOORD0;
 				float4 vertex : SV_POSITION;
 			};
@@ -25,43 +21,46 @@
 			sampler2D _Previous, _Next;
 			float4 _MainTex_TexelSize;
 			
-			v2f vert (float4 vertex : POSITION, float2 uv : TEXCOORD0)
-			{
+            half PixV(sampler2D img, half2 uv) {
+				fixed4 c = tex2D(img,uv);
+				c += tex2D(img, uv + (half2(1, 0)*_MainTex_TexelSize.xy));
+				c += tex2D(img, uv + (half2(0, 1)*_MainTex_TexelSize.xy));
+				c += tex2D(img, uv + (half2(-1, 0)*_MainTex_TexelSize.xy));
+				c += tex2D(img, uv + (half2(0, -1)*_MainTex_TexelSize.xy));
+				return c.r + c.g + c.b;
+			}
+            
+			v2f vert (float4 vertex : POSITION, float2 uv : TEXCOORD0) {
 				v2f o;
 				o.vertex = UnityObjectToClipPos(vertex);
 				o.uv = uv;
 				return o;
 			}
-			fixed4 c;
-			half PixV(sampler2D Target, half2 Shift, fixed2 iuv)
-			{
-				c=tex2D(Target,iuv);
-				c += tex2D(Target, iuv + Shift+ (half2(1, 0)*_MainTex_TexelSize.xy));
-				c += tex2D(Target, iuv + Shift + (half2(0, 1)*_MainTex_TexelSize.xy));
-				c += tex2D(Target, iuv + Shift + (half2(-1, 0)*_MainTex_TexelSize.xy));
-				c += tex2D(Target, iuv + Shift + (half2(0, -1)*_MainTex_TexelSize.xy));
-				return c.r + c.g + c.b;
-			}
-			half CheckValue, FirstValue, PrevValue, LastMatch;
-			float2 FinalUvShift,CheckUvShift;
-			fixed3 cn, cp;
-			fixed4 frag (v2f i) : SV_Target
-			{
-				PrevValue=PixV(_Previous,half2(0,0),i.uv);
-				LastMatch=abs(PrevValue-PixV(_Next,half2(0,0),i.uv));			
-				for(int Circle=1;Circle<4;++Circle)
-				{
-					for(int j=0;j<4*Circle;++j)
-					{
-						if ((CheckValue=abs(PrevValue-PixV(_Next, CheckUvShift=half2(sin((FirstValue = 6.28 / (4*Circle))*j),cos(FirstValue*j))*_MainTex_TexelSize.xy*Circle, i.uv)))<LastMatch)
-						{
-							LastMatch=CheckValue;
-							FinalUvShift=CheckUvShift;
+            
+			fixed4 frag (v2f i) : SV_Target {
+				half prevValue = PixV(_Previous,i.uv);
+                half nextValue = PixV(_Next,i.uv);
+				half minDiff = abs(prevValue-nextValue);
+                float2 finalOffset;
+                
+				for (int cicleR=1; cicleR<4; cicleR++) {
+                    int circleSegments = 4*cicleR;
+                    half angInc = UNITY_TWO_PI / circleSegments;
+                    
+					for (int j=0; j<circleSegments; j++) {
+                        half ang = j * angInc;
+                        float2 offset = half2(sin(ang),cos(ang))*_MainTex_TexelSize.xy*cicleR;// TODO: precompute offsets
+                        half v = PixV(_Next, i.uv + offset);
+                        half diff = abs(prevValue-v);
+                        
+						if (diff < minDiff) {
+							minDiff = diff;
+							finalOffset = offset;
 						}
 					}
 				}
-				return fixed4( FinalUvShift.xy,0,1);
-				
+                
+				return fixed4(finalOffset,0,1);
 			}
 			ENDCG
 		}

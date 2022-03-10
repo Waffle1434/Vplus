@@ -44,15 +44,16 @@
 			float4 frag (v2f i) : SV_Target
 			{
 				float4 result = 0;
-				float multiplier = 1.0 / 32.0;
-				for (int yy = 0;yy < 32;yy++)
+                int size = 32;
+				float multiplier = 1.0 / size;
+				for (int yy = 0;yy < size;yy++)
 				{
-					for (int xx = 0;xx < 32;xx++)
+					for (int xx = 0;xx < size;xx++)
 					{
 						result += abs(tex2D(_A, float2(xx, yy)*multiplier) - tex2D(_B, float2(xx, yy)*multiplier));
 					}
 				}
-				return result;
+				return result;// / (size*size);
 			}
 			ENDCG
 		}
